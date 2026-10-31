@@ -41,7 +41,9 @@ LOGS_DIR = REPO_ROOT / "artifacts" / "logs"
 SITEMAP_URL = "https://newsroom.bmwgroup.com/global/sitemap.xml"
 BASE_URL = "https://newsroom.bmwgroup.com"
 
-MAX_DOCS = _int("BMW_MAX_DOCS", 400)     # cap on articles kept per run
+MAX_DOCS = _int("BMW_MAX_DOCS", 400)     # TOTAL corpus target: collection
+                                         # tops up to this; re-runs at the
+                                         # target are no-ops
 MIN_DATE = _str("BMW_MIN_DATE", "2023-01-01")  # only keep articles >= this
 REQUEST_DELAY_S = 1.0                    # politeness delay between requests
 REQUEST_TIMEOUT_S = 15.0
@@ -49,12 +51,16 @@ MAX_RETRIES = 3                          # per-article retries with backoff
 MIN_TEXT_CHARS = 500                     # articles below this are discarded
 
 # Sitemap entries that look like articles but are static pages.
+# "de"/"en" are the locale landing pages, which match the article URL
+# pattern but are not articles.
 EXCLUDE_PATHS = (
     "media-library",
     "legal-notice",
     "privacy-policy",
     "cookies",
     "e-mail-subscription",
+    "de",
+    "en",
 )
 
 # --------------------------------------------------------------------------
