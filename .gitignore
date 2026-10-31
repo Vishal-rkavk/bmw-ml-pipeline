@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/
+
+# Pipeline outputs: regenerable and potentially large (see README)
+data/
+artifacts/
+
+# Monitoring runtime (binaries are downloaded by monitoring/setup.sh)
+monitoring/bin/
+monitoring/runtime/
+
+# OS / editor noise
+.DS_Store
+.idea/
+.vscode/
