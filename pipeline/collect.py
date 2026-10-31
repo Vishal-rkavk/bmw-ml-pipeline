@@ -34,6 +34,7 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
@@ -45,6 +46,16 @@ SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
 REJECTED_PATH = config.RAW_DIR / "_rejected.json"
 ARTICLE_URL = re.compile(
     rf"^{re.escape(config.BASE_URL)}/global/[a-z0-9-]+/$")
+
+
+def doc_path(slug: str, sha: str) -> Path:
+    """Filesystem-safe, readable, content-unique article path.
+
+    Slugs can exceed the 255-byte filename limit (a 247-char slug
+    crashed the first full run), so the slug is truncated and the
+    content hash suffix guarantees uniqueness.
+    """
+    return config.RAW_DIR / f"{slug[:96]}-{sha[:8]}.json"
 
 
 def fetch(session: requests.Session, url: str) -> str | None:
@@ -136,6 +147,17 @@ def corpus_size() -> int:
                if not p.name.startswith("_"))
 
 
+def _save_rejected(rejected: dict[str, str]) -> None:
+    """Persist the rejected-URL cache.
+
+    Also called periodically during a run so that a crash does not lose
+    it (rejected URLs would otherwise be re-fetched on the next run).
+    """
+    REJECTED_PATH.write_text(
+        json.dumps(rejected, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8")
+
+
 def main() -> int:
     config.ensure_dirs()
     started = time.time()
@@ -149,7 +171,7 @@ def main() -> int:
         return 1
     candidates = article_urls(sitemap_xml)
     print(f"[collect] {len(candidates)} candidate article URLs "
-          f"(cap: {config.MAX_DOCS}, min date: {config.MIN_DATE})")
+          f"(target: {config.MAX_DOCS}, min date: {config.MIN_DATE})")
 
     known_urls, known_hashes, rejected = load_corpus()
     new_hashes: set[str] = set()
@@ -175,60 +197,63 @@ def main() -> int:
                 counts["skipped"] += 1
                 continue
 
-            html = fetch(session, url)
-            time.sleep(config.REQUEST_DELAY_S)
-            if html is None:
+            # Per-article guard: one strange page must never kill the
+            # whole run. Errors are counted, logged loudly, and skipped.
+            try:
+                html = fetch(session, url)
+                time.sleep(config.REQUEST_DELAY_S)
+                if html is None:
+                    counts["error"] += 1
+                    continue
+
+                article = parse_article(html)
+                if article is None:
+                    rejected[url] = "not_article"
+                    counts["skipped"] += 1
+                    continue
+                if article["date"] < config.MIN_DATE:
+                    rejected[url] = "too_old"
+                    counts["skipped"] += 1
+                    continue
+
+                sha = hashlib.sha256(
+                    article["text"].encode("utf-8")).hexdigest()
+                if sha in known_hashes or sha in new_hashes:
+                    rejected[url] = "duplicate_text"
+                    counts["duplicate"] += 1
+                    continue
+
+                slug = url.rstrip("/").rsplit("/", 1)[-1]
+                doc = {
+                    "url": url,
+                    "title": article["title"],
+                    "date": article["date"],
+                    "text": article["text"],
+                    "sha256": sha,
+                    "fetched_at": datetime.now(timezone.utc).isoformat(
+                        timespec="seconds"),
+                }
+                doc_path(slug, sha).write_text(
+                    json.dumps(doc, indent=2, ensure_ascii=False) + "\n",
+                    encoding="utf-8")
+                known_urls.add(url)
+                new_hashes.add(sha)
+                counts["ok"] += 1
+            except Exception as exc:  # noqa: BLE001 - keep collecting
+                print(f"[warn] error processing {url}: {exc!r}")
                 counts["error"] += 1
                 continue
-
-            article = parse_article(html)
-            if article is None:
-                rejected[url] = "not_article"
-                counts["skipped"] += 1
-                continue
-            if article["date"] < config.MIN_DATE:
-                rejected[url] = "too_old"
-                counts["skipped"] += 1
-                continue
-
-            sha = hashlib.sha256(article["text"].encode("utf-8")).hexdigest()
-            if sha in known_hashes or sha in new_hashes:
-                rejected[url] = "duplicate_text"
-                counts["duplicate"] += 1
-                continue
-            slug = url.rstrip("/").rsplit("/", 1)[-1]
-            if (config.RAW_DIR / f"{slug}.json").exists():
-                # different URL but filename taken — never overwrite data
-                rejected[url] = "slug_collision"
-                counts["skipped"] += 1
-                continue
-
-            doc = {
-                "url": url,
-                "title": article["title"],
-                "date": article["date"],
-                "text": article["text"],
-                "sha256": sha,
-                "fetched_at": datetime.now(timezone.utc).isoformat(
-                    timespec="seconds"),
-            }
-            (config.RAW_DIR / f"{slug}.json").write_text(
-                json.dumps(doc, indent=2, ensure_ascii=False) + "\n",
-                encoding="utf-8")
-            known_urls.add(url)
-            new_hashes.add(sha)
-            counts["ok"] += 1
 
             if counts["ok"] % 25 == 0 or i % 100 == 0:
                 print(f"[collect] {i}/{len(candidates)} seen | "
                       f"new={counts['ok']} dup={counts['duplicate']} "
                       f"err={counts['error']} skip={counts['skipped']}")
+                _save_rejected(rejected)  # crash-safe rejected cache
     except KeyboardInterrupt:
         print("\n[collect] interrupted — keeping everything collected so far")
+        _save_rejected(rejected)
 
-    REJECTED_PATH.write_text(
-        json.dumps(rejected, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8")
+    _save_rejected(rejected)
     duration = time.time() - started
     size = corpus_size()
     print(f"[collect] done in {duration:.0f}s | new={counts['ok']} "
