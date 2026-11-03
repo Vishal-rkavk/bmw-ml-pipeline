@@ -1,30 +1,12 @@
 """Step 1: collect BMW press articles into data/raw/ (idempotent).
 
-Source: the BMW Group newsroom (newsroom.bmwgroup.com — the PressPage
-system behind the press.bmwgroup.com URL in the assignment). Discovery
-uses the sitemap, the only reliable machine-readable index of articles
-(the RSS endpoint is a soft 404 and the listing pages are
-JavaScript-rendered). Article metadata (title, datePublished) comes
-from the schema.org JSON-LD block embedded in every article page; the
-body text is the page's substantial <p> paragraphs (short <p>s and
-link-list paragraphs are navigation noise, not prose).
-
-Idempotency — safe re-runs without duplicates:
-- The per-article JSON files in data/raw/ ARE the corpus: there is no
-  separate manifest that could drift out of sync. A URL already in the
-  corpus is never fetched again; an article whose text (sha256) already
-  exists is counted as a duplicate and dropped.
-- URLs checked and rejected (too old, not an article, duplicate text)
-  are recorded in data/raw/_rejected.json so re-runs skip them without
-  refetching. If MIN_DATE is changed, delete _rejected.json to have
-  those URLs re-evaluated.
-- Each article is written immediately, so an interrupted run loses at
-  most the one in-flight request (collection is incrementally
-  persistent).
-- MAX_DOCS is the TOTAL corpus target, not a per-run budget: a run tops
-  the corpus up to MAX_DOCS and a re-run at target is a no-op. The
-  same command therefore always converges to the same corpus (given an
-  unchanged website) — re-runs never grow the corpus by surprise.
+Discovery uses the newsroom sitemap; metadata comes from each page's
+schema.org JSON-LD block and the body from its substantial <p>
+paragraphs. The per-article JSON files are the corpus — a URL that was
+already collected is never fetched again, and identical texts (sha256)
+are dropped. MAX_DOCS is the total corpus target: a run tops up to it,
+and a re-run at target is a no-op. Rejected URLs are cached in
+_rejected.json so they are not fetched again either.
 """
 
 import hashlib
@@ -141,18 +123,8 @@ def load_corpus() -> tuple[set[str], set[str], dict[str, str]]:
     return urls, hashes, rejected
 
 
-def corpus_size() -> int:
-    """Number of collected articles (excludes _rejected.json)."""
-    return sum(1 for p in config.RAW_DIR.glob("*.json")
-               if not p.name.startswith("_"))
-
-
 def _save_rejected(rejected: dict[str, str]) -> None:
-    """Persist the rejected-URL cache.
-
-    Also called periodically during a run so that a crash does not lose
-    it (rejected URLs would otherwise be re-fetched on the next run).
-    """
+    """Persist the rejected-URL cache (_rejected.json)."""
     REJECTED_PATH.write_text(
         json.dumps(rejected, indent=2, sort_keys=True) + "\n",
         encoding="utf-8")
@@ -248,24 +220,27 @@ def main() -> int:
                 print(f"[collect] {i}/{len(candidates)} seen | "
                       f"new={counts['ok']} dup={counts['duplicate']} "
                       f"err={counts['error']} skip={counts['skipped']}")
-                _save_rejected(rejected)  # crash-safe rejected cache
     except KeyboardInterrupt:
         print("\n[collect] interrupted — keeping everything collected so far")
         _save_rejected(rejected)
 
     _save_rejected(rejected)
     duration = time.time() - started
-    size = corpus_size()
+    size = sum(1 for p in config.RAW_DIR.glob("*.json")
+               if not p.name.startswith("_"))
     print(f"[collect] done in {duration:.0f}s | new={counts['ok']} "
           f"dup={counts['duplicate']} err={counts['error']} "
           f"skip={counts['skipped']} | corpus={size} docs")
 
-    metrics.push_series("bmw-collect", "bmw_collect_docs", "status", counts)
-    metrics.push_metrics("bmw-collect", {
-        "bmw_collect_new_docs": counts["ok"],
-        "bmw_collect_duration_seconds": round(duration, 1),
-        "bmw_corpus_docs": size,
-    })
+    metrics.push(
+        "bmw-collect",
+        values={
+            "bmw_collect_new_docs": counts["ok"],
+            "bmw_collect_duration_seconds": round(duration, 1),
+            "bmw_corpus_docs": size,
+        },
+        series={"bmw_collect_docs": ("status", counts)},
+    )
     return 0 if size > 0 else 1
 
 

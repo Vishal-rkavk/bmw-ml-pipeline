@@ -36,8 +36,11 @@ generate: ## Step 5: generate BMW-style text for fixed prompts
 run-all: collect prepare train evaluate generate ## Full pipeline, in order
 
 smoke: ## Fast end-to-end test using tiny settings (same code paths)
+	rm -rf smoke-data smoke-artifacts
+	BMW_DATA_DIR=smoke-data BMW_ARTIFACTS_DIR=smoke-artifacts \
 	BMW_MAX_DOCS=3 BMW_MAX_STEPS=5 BMW_CHECKPOINT_EVERY=2 \
 	BMW_LOG_EVERY=1 BMW_BATCH_SIZE=2 BMW_EVAL_BATCH_SIZE=2 \
+	BMW_METRICS_DISABLE=1 \
 	$(MAKE) run-all
 
 monitoring-up: ## Start Prometheus, Pushgateway, Alertmanager, Grafana

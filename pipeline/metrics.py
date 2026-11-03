@@ -1,17 +1,15 @@
-"""Central metrics for all pipeline steps.
+"""Central metrics: every step pushes its run metrics to the Prometheus
+Pushgateway (batch jobs push; services get scraped).
 
-Every step pushes its run metrics to the Prometheus Pushgateway at the
-end of a run (batch jobs push; long-lived services get scraped — that
-is why a gateway fits a pipeline better than an exporter endpoint).
+A Pushgateway push REPLACES the whole group (job + grouping labels), so
+all metrics of one step must go out in a single call — separate pushes
+to the same group would delete each other. `push` exists exactly for
+that: scalars and labeled series are built into one registry and sent
+once.
 
-All pushes are best-effort: if the gateway is down, the step prints a
-warning and continues. Monitoring must never be a hard dependency of
-the data pipeline itself.
-
-Two helpers:
-- push_metrics: one or more plain gauge values, e.g. a duration.
-- push_series: one metric split across a label, e.g. document counts
-  per status (Prometheus convention: dashboards aggregate by label).
+Pushes are best-effort: if the gateway is down, a warning is printed
+once and the pipeline continues — monitoring must never be a hard
+dependency of the data pipeline.
 """
 
 from __future__ import annotations
@@ -21,36 +19,46 @@ from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
 from pipeline import config
 
 
-def push_metrics(job: str, values: dict[str, float],
-                 grouping: dict[str, str] | None = None) -> None:
-    """Push plain gauge values: {metric_name: value}.
+def push(job: str, values: dict[str, float] | None = None,
+         series: dict[str, tuple[str, dict[str, float]]] | None = None,
+         grouping: dict[str, str] | None = None) -> None:
+    """Push a job's metrics to the gateway in one atomic request.
 
-    grouping becomes the Pushgateway grouping key: pushes with different
-    keys are kept as separate series (training uses this to accumulate
-    a per-step loss curve).
+    values: {metric_name: value} -> plain gauges.
+    series: {metric_name: (label_name, {label_value: value})} -> labeled
+            gauges (e.g. one metric across train/eval or ok/error).
+    grouping: Pushgateway grouping key; different keys are kept as
+              separate series.
+
+    A Pushgateway push replaces the group, hence one call per step: if a
+    step sends its scalars and its labeled series in two pushes, the
+    second push silently deletes the first one's metrics.
     """
     registry = CollectorRegistry()
-    for name, value in values.items():
+    for name, value in (values or {}).items():
         Gauge(name, name, registry=registry).set(value)
-    _push(job, registry, grouping)
-
-
-def push_series(job: str, name: str, label: str,
-                values: dict[str, float],
-                grouping: dict[str, str] | None = None) -> None:
-    """Push one metric across label values: {label_value: value}."""
-    registry = CollectorRegistry()
-    gauge = Gauge(name, name, [label], registry=registry)
-    for label_value, value in values.items():
-        gauge.labels(**{label: label_value}).set(value)
+    for name, (label, labeled) in (series or {}).items():
+        gauge = Gauge(name, name, [label], registry=registry)
+        for label_value, value in labeled.items():
+            gauge.labels(**{label: label_value}).set(value)
     _push(job, registry, grouping)
 
 
 def _push(job: str, registry: CollectorRegistry,
           grouping: dict[str, str] | None) -> None:
     """Deliver to the gateway; never raise into the pipeline."""
+    if not config.METRICS_ENABLED:
+        return
+    global _warned
     try:
         push_to_gateway(config.PUSHGATEWAY_URL, job=job, registry=registry,
                         grouping_key=grouping or {})
+        _warned = False
     except Exception as exc:  # noqa: BLE001 - monitoring is best-effort
-        print(f"[warn] metrics push failed ({exc}); continuing without it")
+        if not _warned:  # warn once per process, not on every push
+            print(f"[warn] metrics push failed ({exc}); "
+                  f"will retry silently until the gateway is reachable")
+            _warned = True
+
+
+_warned = False

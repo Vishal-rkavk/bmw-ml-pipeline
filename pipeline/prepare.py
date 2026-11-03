@@ -1,29 +1,11 @@
-"""Step 2: prepare training/evaluation data from the collected corpus.
+"""Step 2: clean the corpus and split it into train/eval JSONL files.
 
-For every article in data/raw/:
-- assemble the document text as "<title>\n\n<body>" — the title gives
-  the model a natural conditioning prefix (the generation prompts in
-  step 5 are press-release openings);
-- apply light cleaning only (the collector already extracts clean
-  prose): normalize whitespace and drop documents too short to be a
-  useful training signal;
-- split deterministically: a document goes to the EVAL set iff
-  int(sha256(url), 16) % 100 < EVAL_PERCENT. Hashing the stable URL —
-  not the mutable text, not the file listing order — means:
-  * a document always lands in the same split, no matter how often
-    prepare re-runs or how much the corpus grows afterwards;
-  * no leakage is possible: a document's split is a pure function of
-    its own URL, so later-collected articles can never migrate into
-    an evaluation set that was already used.
-
-Outputs: data/processed/train.jsonl and eval.jsonl, one JSON object
-per line: {"id", "date", "text"}. Documents are written in a stable
-order (date, then id) with fixed JSON formatting, so identical inputs
-produce byte-identical outputs — re-running prepare is a no-op by diff.
-
-Note: with very small corpora (e.g. `make smoke`) the eval split can
-end up empty by chance; evaluate.py handles that by warning and
-skipping the metric.
+Documents are "<title>\\n\\n<body>": the title gives the model a natural
+conditioning prefix. A document goes to eval iff hash(url) % 100 <
+EVAL_PERCENT — a pure function of its own URL, so splits never change
+on re-runs and documents can never leak between them. Output is
+written in a stable order with fixed formatting: re-runs are
+byte-identical.
 """
 
 import hashlib
@@ -84,10 +66,12 @@ def main() -> int:
     print(f"[prepare] done in {duration:.1f}s "
           f"({len(splits['train'])} train / {len(splits['eval'])} eval)")
 
-    metrics.push_series("bmw-prepare", "bmw_docs_split", "split",
-                        {name: len(docs) for name, docs in splits.items()})
-    metrics.push_metrics("bmw-prepare", {
-        "bmw_prepare_duration_seconds": round(duration, 1)})
+    metrics.push(
+        "bmw-prepare",
+        values={"bmw_prepare_duration_seconds": round(duration, 1)},
+        series={"bmw_docs_split": ("split",
+                                   {name: len(docs) for name, docs in splits.items()})},
+    )
     return 0 if splits["train"] else 1
 
 
