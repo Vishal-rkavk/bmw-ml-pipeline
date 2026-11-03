@@ -5,8 +5,6 @@
 # reinstalled there. On a plain machine, install any torch >= 2.1 built
 # for your CUDA version.
 #
-# NOTE on transformers: pinned to the 4.x line because the 5.x line
-# requires torch >= 2.6 (the dev host has 2.3). See DECISIONS.md.
 torch>=2.1
 transformers==4.57.6
 requests==2.31.0

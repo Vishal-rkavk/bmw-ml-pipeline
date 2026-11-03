@@ -8,6 +8,12 @@ __pycache__/
 data/
 artifacts/
 
+# Throwaway workspaces used by `make smoke` and scripts/demo_resume.sh
+smoke-data/
+smoke-artifacts/
+demo-artifacts/
+plan.md
+
 # Monitoring runtime (binaries are downloaded by monitoring/setup.sh)
 monitoring/bin/
 monitoring/runtime/
