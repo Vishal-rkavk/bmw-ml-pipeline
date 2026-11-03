@@ -1,0 +1,33 @@
+# Alert rules for the BMW pipeline. Prometheus evaluates them every 5s
+# and routes firing alerts to Alertmanager (visible at :9093).
+groups:
+  - name: bmw-pipeline
+    rules:
+      - alert: BmwTrainingStalled
+        # push_time_seconds is stamped by the Pushgateway on every push;
+        # max(...) is the most recent training push.
+        expr: time() - max(push_time_seconds{job="bmw-train"}) > 300
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Training has pushed no metrics for 5+ minutes"
+          description: >-
+            Training pushes every few seconds, so 5 minutes of silence
+            means it crashed, was killed, or hung. Restart it with
+            `make train` — it resumes from the last checkpoint.
+
+      - alert: BmwCollectionErrorRateHigh
+        # bmw_collect_docs holds the last run's counts by status. Fetch
+        # attempts are ok + error (duplicates and skips are not fetched).
+        expr: >-
+          bmw_collect_docs{status="error"}
+          / (bmw_collect_docs{status="error"}
+             + bmw_collect_docs{status="ok"}) > 0.1
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 10% of collection fetches failed"
+          description: >-
+            The last collection run had a high error rate (timeouts,
+            HTTP failures). The values persist until the next run.

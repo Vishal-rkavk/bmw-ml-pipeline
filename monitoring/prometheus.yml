@@ -1,0 +1,22 @@
+# Prometheus configuration (started by monitoring/up.sh). All stack
+# components run on this host, so every target is on localhost.
+global:
+  scrape_interval: 5s      # short on purpose: dashboards update live
+  evaluation_interval: 5s  # alert rules re-checked often
+
+rule_files:
+  - alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["localhost:9093"]
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+  - job_name: pushgateway
+    honor_labels: true     # keep the pipeline's pushed labels intact
+    static_configs:
+      - targets: ["localhost:9091"]

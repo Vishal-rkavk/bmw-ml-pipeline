@@ -1,0 +1,9 @@
+# Minimal Alertmanager configuration: firing alerts are visible in the
+# UI at http://localhost:9093. Real on-call integrations (email, Slack,
+# PagerDuty webhooks) would be added under the receiver in production.
+route:
+  receiver: pipeline
+  group_wait: 30s
+  group_interval: 5m
+receivers:
+  - name: pipeline

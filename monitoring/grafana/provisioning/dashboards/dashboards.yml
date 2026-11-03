@@ -1,0 +1,11 @@
+# Grafana dashboard provisioning: dashboards are loaded from files in
+# the repository — nothing is configured by hand in the UI, so the
+# dashboard is reproducible from a fresh clone.
+apiVersion: 1
+providers:
+  - name: bmw-pipeline
+    folder: BMW Pipeline
+    type: file
+    updateIntervalSeconds: 10
+    options:
+      path: ${GRAFANA_DASHBOARDS_PATH}

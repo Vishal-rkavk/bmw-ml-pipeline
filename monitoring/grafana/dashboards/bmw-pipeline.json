@@ -1,0 +1,86 @@
+{
+  "title": "BMW ML Pipeline",
+  "uid": "bmw-pipeline",
+  "tags": ["bmw-pipeline"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "timezone": "browser",
+  "time": { "from": "now-3h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Corpus documents",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "bmw_corpus_docs", "legendFormat": "corpus" }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Train / eval docs",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "bmw_docs_split{split=\"train\"}", "legendFormat": "train" },
+        { "refId": "B", "expr": "bmw_docs_split{split=\"eval\"}", "legendFormat": "eval" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Eval perplexity (before / after)",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "bmw_eval_perplexity{phase=\"before\"}", "legendFormat": "before" },
+        { "refId": "B", "expr": "bmw_eval_perplexity{phase=\"after\"}", "legendFormat": "after" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Last collection run by status",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "bmw_collect_docs", "legendFormat": "{{status}}" }]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Training loss",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "bmw_train_loss{kind=\"step\"}", "legendFormat": "loss ({{run}})" }],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Processing speed (tokens/s)",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "bmw_train_tokens_per_second{kind=\"step\"}", "legendFormat": "tokens/s ({{run}})" }],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Step duration (s)",
+      "gridPos": { "x": 0, "y": 13, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "bmw_train_step_duration_seconds{kind=\"step\"}", "legendFormat": "s/step ({{run}})" }],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Checkpoint duration (s)",
+      "gridPos": { "x": 8, "y": 13, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "refId": "A", "expr": "bmw_train_checkpoint_duration_seconds{kind=\"checkpoint\"}", "legendFormat": "s/checkpoint ({{run}})" }],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    }
+  ]
+}
