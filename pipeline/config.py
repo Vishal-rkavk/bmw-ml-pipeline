@@ -28,12 +28,18 @@ def _str(name: str, default: str) -> str:
 # --------------------------------------------------------------------------
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-RAW_DIR = REPO_ROOT / "data" / "raw"                # one JSON per article
-PROCESSED_DIR = REPO_ROOT / "data" / "processed"    # train.jsonl / eval.jsonl
-CHECKPOINT_DIR = REPO_ROOT / "artifacts" / "checkpoints"
-EVAL_DIR = REPO_ROOT / "artifacts" / "eval"
-GENERATIONS_DIR = REPO_ROOT / "artifacts" / "generations"
-LOGS_DIR = REPO_ROOT / "artifacts" / "logs"
+# Roots are overridable so that `make smoke` and demo scripts can run
+# the identical pipeline against throwaway directories.
+DATA_DIR = Path(_str("BMW_DATA_DIR", REPO_ROOT / "data"))
+ARTIFACTS_DIR = Path(_str("BMW_ARTIFACTS_DIR", REPO_ROOT / "artifacts"))
+
+RAW_DIR = DATA_DIR / "raw"                # one JSON per article
+PROCESSED_DIR = DATA_DIR / "processed"    # train.jsonl / eval.jsonl
+CHECKPOINT_DIR = ARTIFACTS_DIR / "checkpoints"
+MODEL_DIR = ARTIFACTS_DIR / "model"  # exported HF format
+EVAL_DIR = ARTIFACTS_DIR / "eval"
+GENERATIONS_DIR = ARTIFACTS_DIR / "generations"
+LOGS_DIR = ARTIFACTS_DIR / "logs"
 
 # --------------------------------------------------------------------------
 # Step 1: data collection (pipeline/collect.py)
@@ -41,7 +47,7 @@ LOGS_DIR = REPO_ROOT / "artifacts" / "logs"
 SITEMAP_URL = "https://newsroom.bmwgroup.com/global/sitemap.xml"
 BASE_URL = "https://newsroom.bmwgroup.com"
 
-MAX_DOCS = _int("BMW_MAX_DOCS", 400)     # TOTAL corpus target: collection
+MAX_DOCS = _int("BMW_MAX_DOCS", 450)     # TOTAL corpus target: collection
                                          # tops up to this; re-runs at the
                                          # target are no-ops
 MIN_DATE = _str("BMW_MIN_DATE", "2023-01-01")  # only keep articles >= this
@@ -87,6 +93,7 @@ BATCH_SIZE = _int("BMW_BATCH_SIZE", 16)
 LEARNING_RATE = 1e-4
 WEIGHT_DECAY = 0.01
 WARMUP_STEPS = 30
+GRADIENT_CLIP = 1.0
 LOG_EVERY = _int("BMW_LOG_EVERY", 10)          # steps between log lines
 CHECKPOINT_EVERY = _int("BMW_CHECKPOINT_EVERY", 50)  # steps between ckpts
 KEEP_CHECKPOINTS = 2                           # older checkpoints are deleted
@@ -111,10 +118,20 @@ GEN_MAX_NEW_TOKENS = 120
 # --------------------------------------------------------------------------
 PUSHGATEWAY_URL = _str("BMW_PUSHGATEWAY_URL", "http://localhost:9091")
 
+# Throwaway smoke/demo runs must not overwrite the dashboard's real
+# numbers, so they disable pushes (BMW_METRICS_DISABLE=1).
+METRICS_ENABLED = _str("BMW_METRICS_DISABLE", "").strip().lower() not in (
+    "1", "true", "yes", "on")
+
+# Training runs are labelled with this id. Keep it stable across a
+# resume (default "main" does) and set BMW_RUN_ID for a new run so its
+# curve does not blend into the previous one.
+RUN_ID = _str("BMW_RUN_ID", "main")
+
 
 def ensure_dirs() -> None:
     """Create every directory the pipeline writes to (idempotent)."""
-    for d in (RAW_DIR, PROCESSED_DIR, CHECKPOINT_DIR, EVAL_DIR,
+    for d in (RAW_DIR, PROCESSED_DIR, CHECKPOINT_DIR, MODEL_DIR, EVAL_DIR,
               GENERATIONS_DIR, LOGS_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
