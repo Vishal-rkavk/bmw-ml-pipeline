@@ -18,14 +18,29 @@ from pipeline import config, metrics
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 PROMPTS = [
-    "The new BMW",
+    # style probes — keep these two for before/after contrast
     "Munich.",
+    "The new BMW",
+
+    # model launches
+    "Munich. The new BMW iX4",
+    "The new BMW M5 Touring combines",
+    "BMW Motorrad presents the new",
+
+    # technology / platform
+    "The Neue Klasse",
+    "The sixth-generation BMW eDrive technology",
+
+    # design / production
+    "The exterior design of the new BMW",
+    "BMW Group Plant Munich",
+
+    # business / sustainability
     "The BMW Group delivered",
-    "The BMW iX4 is",
-    "BMW Motorrad presents",
-    "The BMW M3",
     "Sustainability at the BMW Group means",
-    "The Neue Klasse platform",
+
+    # performance / motorsport
+    "Munich. BMW M GmbH",
 ]
 
 
