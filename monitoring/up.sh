@@ -26,7 +26,9 @@ start() { # start <name> <command...>
   if [ -f "$pidfile" ]; then
     local pid state
     pid=$(cat "$pidfile")
-    state=$(ps -o stat= -p "$pid" 2>/dev/null | tr -d ' ')
+    # `ps` exits non-zero when the PID is gone. Without `|| true`,
+    # `set -e` would abort on that stale pidfile instead of restarting.
+    state=$(ps -o stat= -p "$pid" 2>/dev/null | tr -d ' ' || true)
     # A zombie (state Z) is a dead process whose parent never reaped it
     # (common in containers). Treat it as not running so we can restart.
     if [ -n "$state" ] && [ "${state#Z}" = "$state" ]; then

@@ -47,7 +47,7 @@ LOGS_DIR = ARTIFACTS_DIR / "logs"
 SITEMAP_URL = "https://newsroom.bmwgroup.com/global/sitemap.xml"
 BASE_URL = "https://newsroom.bmwgroup.com"
 
-MAX_DOCS = _int("BMW_MAX_DOCS", 450)     # TOTAL corpus target: collection
+MAX_DOCS = _int("BMW_MAX_DOCS", 1000)    # TOTAL corpus target: collection
                                          # tops up to this; re-runs at the
                                          # target are no-ops
 MIN_DATE = _str("BMW_MIN_DATE", "2023-01-01")  # only keep articles >= this
@@ -88,7 +88,7 @@ BLOCK_SIZE = 512  # training sequence length in tokens
 # Step 3: training (pipeline/train.py)
 # --------------------------------------------------------------------------
 SEED = 42
-MAX_STEPS = _int("BMW_MAX_STEPS", 300)
+MAX_STEPS = _int("BMW_MAX_STEPS", 800)
 BATCH_SIZE = _int("BMW_BATCH_SIZE", 16)
 LEARNING_RATE = 1e-4
 WEIGHT_DECAY = 0.01
